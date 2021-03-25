@@ -1,107 +1,78 @@
 import requests 
 from bs4 import BeautifulSoup 
-import csv
 import re
 import time
 import pandas as pd
 
 
-#urls = []
+def content_to_soup(page): return BeautifulSoup(page.content, 'lxml')
 
-#for i in range(0,15):#
-#	with requests.session() as s:
-#		url = 'https://www.thecdg.co.uk/members/'
-#		r = s.get(url)
-#		soup = BeautifulSoup(r.content, 'lxml')
-#		inputs = [i for i in soup.select(r'form input[type="hidden"]')]
-#		form = {x['name']: x['value'] for x in inputs if x['value']} 
-#		form['page'] = i + 1 
-#		response = s.post('https://www.thecdg.co.uk/members/', data=form)
-#	soup = BeautifulSoup(response.content, 'lxml')
-#	links = [link.get('href') for link in soup.find_all(r'a') if re.search(r'https://www.thecdg.co.uk/members/', link.get('href'))]
-#	urls.append(links)
-#with open('urls.csv', 'w', encoding='utf-8') as csvfile:
-#	writer = csv.writer(csvfile, delimiter=',')
-#	[writer.writerow([i]) for i in urls]
+def soup_to_links(soup):
+	links = []
+	[links.append(link.get('href')) for link in soup.find_all(r'a') if re.search(r'https://www.thecdg.co.uk/members/', link.get('href')) and link.get('href') not in links]
+	return links
 
-#urls2 = []
-#with open('urls.csv', newline='') as f:
-#    reader = csv.reader(f)
-#    for row in reader:
-#        urls2.append([row])
-
-#prelinks = [urls2[i][0][0] for i in range(0,len(urls2),2)]
-#testlinks = []
-#for o in prelinks:
-#	o = o.split(',')
-#	testlinks.append(o)
-
-
-
-#actual = []
-#for e in testlinks:
-#	for i in e:
-#		if i == "['https://www.thecdg.co.uk/members/'":
-#			continue
-#		elif i == 'https://www.thecdg.co.uk/members/':
-#			continue
-#		elif i.strip().strip(']').strip('[').strip("'") not in actual:
-#			actual.append(i.strip().strip(']').strip('[').strip("'"))
-
-prelist = []
-
-#for i in range(len(actual)):
-#	#source = requests.get(actual[i], time.sleep(2)).text
-#	soup = BeautifulSoup(source,'lxml')
-#	data = soup.find('table').text
-#	dataII = data.split('\n\n')
-#	dataIII = [i.split('\n') for i in dataII]
-#	prelist.append(dataIII)
-
-headers = {}
-
-for i in prelist:
-	for o in i:
-		if '' in o:
-			continue
-		elif 'Nickname' in headers:
-			track = len(headers['Nickname'])
-			if o[0] in headers:
-				if len(headers[o[0]]) == track:
-					headers[o[0]].append(o[1])
-				else:
-					headers[o[0]].extend(['N/A' for i in range(track-1 - len(headers[o[0]]))])
-					headers[o[0]].append(o[1])	
-			else:
-				headers[o[0]] = ['N/A' for i in range(track-1)]
-				headers[o[0]].append(o[1])
+def populate_null_fields(data):
+	for label in data:
+		print(label)
+		if label == 'Nickname':
+			continue 
+		elif len(data['Nickname']) > len(data[label]):
+			data[label].extend(['N/A' for i in range(len(data['Nickname']) - len(data[label]))])
 		else:
-			headers[o[0]] = [o[1]]
-for i in headers:
-	if i == 'Nickname':
-		continue 
-	elif len(headers['Nickname']) > len(headers[i]):
-		headers[i].extend(['N/A' for i in range(len(headers['Nickname']) - len(headers[i]))])
-	else:
-		continue
+			continue
+	return data
+
+def list_to_final(data):
+	final = {}
+	for lists in data:
+		label, row_value = lists[0], lists[1]
+		if '' in lists:
+			continue
+		elif 'Nickname' in final:
+			track = len(final['Nickname'])
+			if label in final and len(final[label]) == track:
+				final[label].append(row_value)
+			elif label in final:
+				final[label].extend(['N/A' for i in range(track-1 - len(final[label]))])
+				final[label].append(row_value)
+			else:
+				final[label] = [row_value]
+		else:
+			final[label] = [row_value]
+	return populate_null_fields(final) 
+
+	
+urls = []
+
+for i in range(0,15): 
+	with requests.session() as s:
+		url = 'https://www.thecdg.co.uk/members/'
+		r = s.get(url)
+		soup = content_to_soup(r) 
+		inputs = [i for i in soup.select(r'form input[type="hidden"]')] 
+		form = {x['name']: x['value'] for x in inputs if x['value']} 
+		form['page'] = i + 1 
+		response = s.post(url, data=form)
+	urls += soup_to_links(content_to_soup(response))
+	time.sleep(8)
+
+urls = (i for i in urls if i != 'https://www.thecdg.co.uk/members/')
+
+data_lists = []
+for i in urls:
+		source = requests.get(i, time.sleep(8))
+		soup = content_to_soup(source)
+		data_lists += soup.find('table').text.split('\n\n')
+		data = (e.split('\n') for e in data_lists if e != '')
+
+final = list_to_final(data)
 
 
-
-df = pd.concat([pd.DataFrame(v, columns=[k]) for k, v in headers.items()], axis=1)
-df.to_csv('testIV.csv')
-
+df = pd.concat([pd.DataFrame(v, columns=[k]) for k, v in next(final).items()], axis=1) 
+df.to_csv('casting_directors.csv')
 
 
-
-
-
-
-
-#for i in actual:
-#	source = requests.get(i, time.sleep(15)).text
-#	print(source)
-	#soup = BeautifulSoup(source,'lxml')
-	#data.append(soup.find('table').find_all(text=True))
 
 
 
